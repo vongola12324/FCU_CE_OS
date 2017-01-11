@@ -24,6 +24,7 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
@@ -36,9 +37,10 @@
 #include <sys/socket.h>
 #include <resolv.h>
 #include <arpa/inet.h>
+#include <ctype.h>
+#include <math.h>
 #define MY_PORT 9999
-void PERROR(char* msg);
-#define PERROR(msg) {
+void PERROR(char *msg) {
     perror(msg);
     abort();
 }
@@ -52,10 +54,10 @@ char *Host="127.0.0.1:9999";
 /*---------------------------------------------------------------------*/
 char* strtrim(char *str){
     int tail=strlen(str);
-	while ( str[tail] <= ' '  &&  tail > 0 )
+	while ( str[tail] <= ' ' && tail > 0 )
 		tail--;
 	str[tail+1] = 0;
-	while ( *str <= ' '  &&  *str != 0 )
+	while ( *str <= ' ' && *str != 0 )
 		str++;
     return str;
 }
@@ -78,9 +80,9 @@ char* dir_up(char* dirpath) {
 	int len;
 	strcpy(Path, dirpath);
 	len = strlen(Path);
-	if ( len > 1  &&  Path[len-1] == '/' )
+	if ( len > 1 && Path[len-1] == '/' )
 		len--;
-	while ( Path[len-1] != '/'  &&  len > 1 )
+	while ( Path[len-1] != '/' && len > 1 )
 		len--;
 	Path[len] = 0;
 	return Path;
@@ -89,12 +91,13 @@ char* dir_up(char* dirpath) {
 /*---------------------------------------------------------------------*/
 /*--- DirListing - read the directory and output an HTML table      ---*/
 /*---------------------------------------------------------------------*/
-void DirListing(FILE* FP, char* Path) {	
+void DirListing(FILE* FP, char* Path, char *Proto) {	
     struct dirent *dirent;
 	struct stat info;
 	char Filename[MAXPATH];
+    fprintf(FP, "HTTP/%s 200 Ok \r\n\r\n", Proto);
 	DIR* dir = opendir(Path);
-	fprintf(FP, "<html><head><title>Directory Lister</title></body>"
+	fprintf(FP, "<!DOCTYPE HTML><html><head><title>Directory Lister</title></head>"
 		"<body><font size=+4>Linux Directory Server</font><br><hr width=\"100%%\"><br><center>"
 		"<table border cols=4 width=\"100%%\" bgcolor=\"#33CCFF\">");
 	fprintf(FP, "<caption><font size=+3>Directory of %s</font></caption>\n", Path);
@@ -119,7 +122,7 @@ void DirListing(FILE* FP, char* Path) {
 			}
 			else if ( S_ISREG(info.st_mode) ) {
 				fprintf(FP, "<td><a href=\"ftp://%s%s\">%s</a></td>", Host, Filename, dirent->d_name);
-				fprintf(FP, "<td>%d</td>", info.st_size);
+				fprintf(FP, "<td>%lld</td>", (long long int)info.st_size);
 			}
 			else if ( S_ISLNK(info.st_mode) )
 				fprintf(FP, "<td>Link</td>");
@@ -142,6 +145,30 @@ void DirListing(FILE* FP, char* Path) {
 	fprintf(FP, "</table></center></body></html>");
 }
 
+char *htmldecode(char *msg){
+    int i, r, j, total = 0;
+    char *rtn = (char *)malloc(sizeof(char)*strlen(msg));
+    for(i=0, r=0;i<strlen(msg);i++, r++) {
+        if (msg[i] != '%') {
+            rtn[r] = msg[i];
+        } else {
+            total = 0;
+            for(j=1;j<=2;j++) {
+                if(isupper(msg[i+j])) {
+                    total += (msg[i+j] - 'A')*pow(16, 2-j);
+                } else if(islower(msg[i+j])) {
+                    total += (msg[i+j] - 'a')*pow(16, 2-j);
+                } else {
+                    total += (msg[i+j] - '0')*pow(16, 2-j);
+                }
+            }
+            rtn[r] = total;
+            i+=2;
+        }
+    }
+    return rtn;
+}
+
 /*---------------------------------------------------------------------*/
 /*--- main - set up client and accept connections.                  ---*/
 /*---------------------------------------------------------------------*/
@@ -160,17 +187,18 @@ int main(void) {
 		PERROR("Listen");
 	while (1) {	
         int len;
-		int client = accept(sd, (struct sockaddr*)&addr, &addrlen);
+		int client = accept(sd, (struct sockaddr*)&addr, (void *)&addrlen);
 		printf("Connected: %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 		if ( (len = recv(client, buffer, MAXBUF, 0)) > 0 ) {
 			FILE* ClientFP = fdopen(client, "w");
 			if ( ClientFP == NULL )
 				perror("fpopen");
 			else {
-                char Req[MAXPATH];
-				sscanf(buffer, "GET %s HTTP", Req);
-				printf("Request: \"%s\"\n", Req);
-				DirListing(ClientFP, Req);
+                char Req[MAXPATH], Proto[5], *Path;
+				sscanf(buffer, "GET %s HTTP/%s ", Req, Proto);
+                Path = htmldecode(Req);
+				printf("Request: \"%s\"\n", Path);
+				DirListing(ClientFP, Path, Proto);
 				fclose(ClientFP);
 			}
 		}
