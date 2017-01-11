@@ -11,10 +11,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-void PANIC(char *msg);
-#define PANIC(msg) {
+void PANIC(char *msg) {
     perror(msg);
-    exit(0);
+    exit(1);
 }
 
 void http(struct sockaddr_in *client_addr) {
@@ -28,7 +27,7 @@ void http(struct sockaddr_in *client_addr) {
     if (!fork())
         execvp(argv[0], argv);
 }
-  int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
     int sd;
     int port;
     int new_fd;
@@ -50,22 +49,23 @@ void http(struct sockaddr_in *client_addr) {
         PANIC("Listen");
     while (1) {
         len = sizeof(client_addr);
-        new_fd = accept(sd, (struct sockaddr *)&client_addr, &len);
-        printf("%d,Client from %s:%d\n", new_fd, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        new_fd = accept(sd, (struct sockaddr *)&client_addr, (void *)&len);
+        const int nfd = new_fd;
+        printf("%d,Client from %s:%d\n", nfd, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
         if (new_fd < 0)
             perror("Accept");
         else {
             if (!fork()) {
                 close(sd);
-                dup2(new_fd, 0);
-                dup2(new_fd, 1);
-                dup2(new_fd, 2);
-                close(new_fd);
+                dup2(nfd, 0);
+                dup2(nfd, 1);
+                dup2(nfd, 2);
+                close(nfd);
                 http(&client_addr);
                 wait(&state);
                 exit(0);
             }
-            close(new_fd);
+            close(nfd);
         }
     }
     return 0;
