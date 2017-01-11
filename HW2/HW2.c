@@ -1,22 +1,18 @@
-/*
-¨Ï¥Î pthread ªºÂ²³æ echo server
-echo_pthread
-*/
-#include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h> 
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <resolv.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#define SERVER_PORT 22222
 
-void PANIC(char *msg);
-#define PANIC(msg) {
+void PANIC(char *msg) {
     perror(msg);
     exit(-1);
 }
-#define SERVER_PORT 22222
 
 void *ServerThread(void *arg) {
     char buf[100];
@@ -49,14 +45,14 @@ int main(void)
     if (listen(fd, 20) != 0)
         PANIC("listen");
     for (;;) {
-          addr_size = sizeof(server_addr);
-        client_fd = accept(fd, (struct sockaddr *)&server_addr, &addr_size);
+        addr_size = sizeof(server_addr);
+        client_fd = accept(fd, (struct sockaddr *)&server_addr, (socklen_t *)&addr_size);
         printf("Connected: %s:%d\n", inet_ntoa(server_addr.sin_addr), ntohs(server_addr.sin_port));
-        if (pthread_create(&my_thread, NULL, ServerThread, &client_fd) != 0)
+        const int cfd = client_fd;
+        if (pthread_create(&my_thread, NULL, ServerThread,(void *) &cfd) != 0)
             perror("Thread creation");
         else
             pthread_detach(my_thread);
-         
     }
     return 0;
 }
