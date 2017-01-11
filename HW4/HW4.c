@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#define PANIC(msg) {
+void PANIC(char *msg) {
     perror(msg);
     exit(0);
 }
@@ -55,35 +55,33 @@ int main(int argc, char *argv[]) {
         PANIC("listen");
     FD_SET(server_fd, &master_fds);
     FD_SET(STDIN, &master_fds);
-
     fdmax = server_fd;
-     
     for (;;) {
         read_fds = master_fds;
         retval = select(fdmax + 1, &read_fds, NULL, NULL, &tv);
         switch (retval) {
             case -1 : perror("select");
-            continue;
+                      continue;
             case 0:
-            printf("Time Out...");
-            for (i = 3; i <= fdmax; i++) {
-                if (FD_ISSET(i, &master_fds))
-                    close(i);
-            }
-              exit(0);
+                      printf("Time Out...");
+                      for (i = 3; i <= fdmax; i++) {
+                          if (FD_ISSET(i, &master_fds))
+                              close(i);
+                      }
+                      exit(0);
         }
         for (i = 0; i <= fdmax; i++) {
             if (FD_ISSET(i, &read_fds)) {
-                  if (i == server_fd) { //Handle New Connection
+                if (i == server_fd) { //Handle New Connection
                     len = sizeof(client_addr);
-                    if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &len)) == -1) {
+                    if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (void *)&len)) == -1) {
                         perror("accept");
                         continue;
                     }
                     else {
                         FD_SET(client_fd, &master_fds);
-                          if (client_fd > fdmax) {
-                              fdmax = client_fd;
+                        if (client_fd > fdmax) {
+                            fdmax = client_fd;
                         }
                         printf("New connection from %s on socket %d\n", inet_ntoa(client_addr.sin_addr), client_fd);
                     }
@@ -104,7 +102,7 @@ int main(int argc, char *argv[]) {
                     else {
                         perror("recv");
                         close(i);
-                        FD_CLR(i, &master_fds); 
+                        FD_CLR(i, &master_fds);
                     }
                 }
             } //if
