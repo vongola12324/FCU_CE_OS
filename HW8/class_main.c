@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "class_ex1_class.h"
 
 int main() {
